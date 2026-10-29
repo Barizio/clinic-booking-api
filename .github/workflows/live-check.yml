@@ -1,0 +1,30 @@
+# Manual end-to-end check against the deployed API, from GitHub's network.
+# Runs all 43 tests (this wipes data), then reloads the demo slots either way.
+name: Live check
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Deployed URL
+        default: https://clinic-booking-api-sigma.vercel.app
+        required: true
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_URL: ${{ inputs.base_url }}
+      API_KEY: ${{ secrets.API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The local test database (embedded-postgres) is not needed against a live URL.
+      - run: npm ci --omit=dev
+      - run: npm test
+      - name: Reload demo slots
+        if: always()
+        run: npm run seed
