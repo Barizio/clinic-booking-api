@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clinic Booking</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #ffffff; --ink: #1d2320; --muted: #66706a; --line: #e2ded4;
+    --accent: #1f6f5c; --accent-ink: #ffffff; --taken: #b9b4a8; --danger: #b23b2e; --ok: #1f6f5c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141716; --card: #1c201e; --ink: #ecebe6; --muted: #9aa39d; --line: #2c322f;
+            --accent: #4fb39a; --accent-ink: #0d1412; --taken: #4a504c; --danger: #ef7d6f; --ok: #4fb39a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+  header p { margin: 4px 0 24px; color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+                  background: var(--bg); color: var(--ink); font: inherit; }
+  .grow { flex: 1 1 200px; }
+  button { padding: 10px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
+           font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  .day { margin: 16px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .slot { text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+          background: var(--bg); color: var(--ink); font-weight: 500; }
+  .slot small { display: block; color: var(--muted); font-weight: 400; }
+  .slot[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .slot:disabled { color: var(--taken); text-decoration: line-through; opacity: 1; }
+  .msg { padding: 10px 12px; border-radius: 10px; margin-top: 12px; font-size: 14px; }
+  .msg.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+  .confirm { border-color: var(--ok); }
+  .confirm dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 12px; }
+  .confirm dt { color: var(--muted); }
+  .confirm dd { margin: 0; word-break: break-all; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px; font-weight: 600;
+          background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+  .pill.cancelled { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+  .empty { color: var(--muted); }
+  .hidden { display: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Book an appointment</h1>
+    <p>Pick a free slot, enter your details, and get an instant confirmation.</p>
+  </header>
+
+  <section class="card" id="keyCard">
+    <div class="row">
+      <div class="grow">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="Paste the clinic API key">
+      </div>
+      <button id="saveKey">Connect</button>
+    </div>
+    <div id="keyMsg"></div>
+  </section>
+
+  <section class="card" id="slotsCard">
+    <div class="row" style="justify-content: space-between">
+      <h2 style="margin:0">Available slots</h2>
+      <div style="display:flex; gap:8px; align-items:center">
+        <select id="provider" aria-label="Filter by provider" style="width:auto"><option value="">All providers</option></select>
+        <button class="ghost" id="refresh">Refresh</button>
+      </div>
+    </div>
+    <div id="slotList"><p class="empty">Connect with your API key to see slots.</p></div>
+  </section>
+
+  <section class="card" id="formCard">
+    <h2>Your details</h2>
+    <form id="bookForm" novalidate>
+      <div class="row">
+        <div class="grow"><label for="name">Full name</label><input id="name" required autocomplete="name"></div>
+        <div class="grow"><label for="email">Email</label><input id="email" type="email" required autocomplete="email"></div>
+        <button type="submit" id="bookBtn" disabled>Book selected slot</button>
+      </div>
+      <p id="selected" class="empty" style="margin:10px 0 0">No slot selected.</p>
+      <div id="bookMsg"></div>
+    </form>
+  </section>
+
+  <section class="card confirm hidden" id="confirmCard" aria-live="polite">
+    <h2>Booking confirmed <span class="pill" id="cStatus">confirmed</span></h2>
+    <dl>
+      <dt>Booking ID</dt><dd id="cId"></dd>
+      <dt>Doctor</dt><dd id="cProvider"></dd>
+      <dt>When</dt><dd id="cWhen"></dd>
+      <dt>Name</dt><dd id="cName"></dd>
+      <dt>Email</dt><dd id="cEmail"></dd>
+    </dl>
+    <button class="ghost" id="cancelBtn">Cancel this booking</button>
+  </section>
+
+  <section class="card">
+    <h2>Find my bookings</h2>
+    <div class="row">
+      <div class="grow"><label for="lookupEmail">Email</label><input id="lookupEmail" type="email"></div>
+      <button class="ghost" id="lookupBtn">Look up</button>
+    </div>
+    <div id="myBookings"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let key = '';
+  try { key = localStorage.getItem('clinicApiKey') || ''; } catch {}
+  let slots = [];
+  let selected = null;
+  let current = null;
+  let pendingIdemKey = null;   // reused if the same booking is retried
+  let pendingBody = '';
+  let nextCursor = null;
+
+  const fmtDay = (d) => new Date(d).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  const fmtTime = (d) => new Date(d).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const show = (el, text, isErr = true) => { el.innerHTML = text ? `<div class="msg ${isErr ? 'err' : ''}"></div>` : ''; if (text) el.firstChild.textContent = text; };
+
+  async function api(path, opts = {}) {
+    const headers = { 'X-API-Key': key, ...(opts.body ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) };
+    const res = await fetch(path, { ...opts, headers });
+    let data = null;
+    try { data = await res.json(); } catch {}
+    return { res, data };
+  }
+
+  async function loadSlots() {
+    if (!key) return;
+    const p = $('provider').value;
+    const { res, data } = await api('/slots' + (p ? `?provider=${encodeURIComponent(p)}` : ''));
+    if (res.status === 401) { show($('keyMsg'), 'That API key was not accepted.'); $('slotList').innerHTML = ''; return; }
+    show($('keyMsg'), '');
+    slots = (data && data.slots) || [];
+    if (!p) {
+      const providers = [...new Set(slots.map((s) => s.provider))];
+      $('provider').innerHTML = '<option value="">All providers</option>' +
+        providers.map((x) => `<option></option>`).join('');
+      [...$('provider').options].slice(1).forEach((o, i) => { o.value = providers[i]; o.textContent = providers[i]; });
+    }
+    renderSlots();
+  }
+
+  function renderSlots() {
+    const list = $('slotList');
+    const upcoming = slots.filter((s) => new Date(s.start) > new Date());
+    if (!upcoming.length) { list.innerHTML = '<p class="empty">No upcoming slots.</p>'; return; }
+    list.innerHTML = '';
+    let lastDay = '';
+    let grid;
+    for (const s of upcoming) {
+      const day = fmtDay(s.start);
+      if (day !== lastDay) {
+        const h = document.createElement('div'); h.className = 'day'; h.textContent = day; list.appendChild(h);
+        grid = document.createElement('div'); grid.className = 'slots'; list.appendChild(grid);
+        lastDay = day;
+      }
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'slot';
+      b.disabled = !s.available;
+      b.setAttribute('aria-pressed', selected && selected.id === s.id ? 'true' : 'false');
+      b.innerHTML = '<span></span><small></small>';
+      b.firstChild.textContent = `${fmtTime(s.start)} – ${fmtTime(s.end)}`;
+      b.lastChild.textContent = s.available ? s.provider : `${s.provider} · booked`;
+      b.onclick = () => { selected = s; renderSlots(); updateSelected(); };
+      grid.appendChild(b);
+    }
+    if (selected && !upcoming.some((s) => s.id === selected.id && s.available)) { selected = null; updateSelected(); }
+  }
+
+  function updateSelected() {
+    $('selected').textContent = selected
+      ? `Selected: ${selected.provider}, ${fmtDay(selected.start)} at ${fmtTime(selected.start)}`
+      : 'No slot selected.';
+    $('bookBtn').disabled = !selected;
+  }
+
+  function showConfirmation(b) {
+    current = b;
+    const s = slots.find((x) => x.id === b.slot_id);
+    $('cId').textContent = b.id;
+    $('cProvider').textContent = s ? s.provider : b.slot_id;
+    $('cWhen').textContent = s ? `${fmtDay(s.start)}, ${fmtTime(s.start)} – ${fmtTime(s.end)}` : '';
+    $('cName').textContent = b.name;
+    $('cEmail').textContent = b.email;
+    $('cStatus').textContent = b.status;
+    $('cStatus').className = 'pill' + (b.status === 'cancelled' ? ' cancelled' : '');
+    $('cancelBtn').classList.toggle('hidden', b.status !== 'confirmed');
+    $('confirmCard').classList.remove('hidden');
+    $('confirmCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  $('saveKey').onclick = () => {
+    key = $('apiKey').value.trim();
+    try { localStorage.setItem('clinicApiKey', key); } catch {}
+    loadSlots();
+  };
+  $('refresh').onclick = loadSlots;
+  $('provider').onchange = loadSlots;
+
+  $('bookForm').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!selected) return;
+    const body = JSON.stringify({ slot_id: selected.id, name: $('name').value, email: $('email').value });
+    if (body !== pendingBody) { pendingBody = body; pendingIdemKey = crypto.randomUUID(); }
+    $('bookBtn').disabled = true;
+    show($('bookMsg'), '');
+    try {
+      const { res, data } = await api('/bookings', { method: 'POST', body, headers: { 'Idempotency-Key': pendingIdemKey } });
+      if (res.status === 201) {
+        pendingBody = ''; selected = null; updateSelected();
+        await loadSlots();
+        // Look the booking up again so the confirmation shows what the server stored.
+        const { data: saved } = await api(`/bookings/${encodeURIComponent(data.id)}`);
+        showConfirmation(saved || data);
+      } else {
+        const wait = res.headers.get('Retry-After');
+        show($('bookMsg'), (data && data.error ? data.error : `Request failed (${res.status})`) + (wait ? ` Try again in ${wait}s.` : ''));
+        if (res.status === 409) { pendingBody = ''; loadSlots(); }
+      }
+    } catch {
+      show($('bookMsg'), 'Network problem. Press Book again; it will not double-book.');
+    } finally { $('bookBtn').disabled = !selected; }
+  };
+
+  $('cancelBtn').onclick = async () => {
+    if (!current) return;
+    const { res, data } = await api(`/bookings/${encodeURIComponent(current.id)}`, { method: 'DELETE' });
+    if (res.ok) { showConfirmation(data); loadSlots(); }
+    else alert(data && data.error ? data.error : 'Could not cancel');
+  };
+
+  async function lookup(append) {
+    const email = $('lookupEmail').value.trim();
+    if (!email) return;
+    const q = new URLSearchParams({ email, limit: '10' });
+    if (append && nextCursor) q.set('cursor', nextCursor);
+    const { res, data } = await api('/bookings?' + q);
+    const box = $('myBookings');
+    if (!res.ok) { show(box, (data && data.error) || 'Lookup failed'); return; }
+    nextCursor = data.next_cursor;
+    let table = box.querySelector('table');
+    if (!append || !table) {
+      box.innerHTML = data.bookings.length ? '<table><thead><tr><th>Booked</th><th>Slot</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>' : '<p class="empty">No bookings for that email.</p>';
+      table = box.querySelector('table');
+    }
+    const more = box.querySelector('.more'); if (more) more.remove();
+    if (table) {
+      const tbody = table.querySelector('tbody');
+      for (const b of data.bookings) {
+        const tr = document.createElement('tr');
+        const s = slots.find((x) => x.id === b.slot_id);
+        tr.innerHTML = '<td></td><td></td><td><span class="pill"></span></td><td><button class="ghost" style="padding:4px 10px">View</button></td>';
+        tr.children[0].textContent = new Date(b.created_at).toLocaleString();
+        tr.children[1].textContent = s ? `${s.provider}, ${fmtDay(s.start)} ${fmtTime(s.start)}` : b.slot_id;
+        const pill = tr.children[2].firstChild; pill.textContent = b.status; if (b.status === 'cancelled') pill.classList.add('cancelled');
+        tr.querySelector('button').onclick = () => showConfirmation(b);
+        tbody.appendChild(tr);
+      }
+    }
+    if (nextCursor) {
+      const btn = document.createElement('button'); btn.className = 'ghost more'; btn.style.marginTop = '12px';
+      btn.textContent = 'Load more'; btn.onclick = () => lookup(true); box.appendChild(btn);
+    }
+  }
+  $('lookupBtn').onclick = () => lookup(false);
+
+  if (key) { $('apiKey').value = key; loadSlots(); }
+})();
+</script>
+</body>
+</html>
