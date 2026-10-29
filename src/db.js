@@ -61,6 +61,12 @@ function init() {
     ready = (async () => {
       const client = await pool.connect();
       try {
+        // Fast path for every cold start after the first: the schema is already
+        // there. Re-running the DDL would take table locks that deadlock with
+        // bookings in flight on warm instances. 'seeded' is written in the same
+        // transaction as the schema, so its presence means the schema is complete.
+        const has = await client.query("SELECT to_regclass('public.app_meta') IS NOT NULL AS ok");
+        if (has.rows[0].ok && (await client.query("SELECT 1 FROM app_meta WHERE k = 'seeded'")).rowCount) return;
         // Serialise schema creation across cold starts. Transaction-scoped lock,
         // so it is safe behind a transaction-mode pooler (e.g. Neon's).
         await client.query('BEGIN');
