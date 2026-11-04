@@ -46,7 +46,8 @@ app.use(async (req, res, next) => {
 });
 
 // ---------- helpers ----------
-const iso = (d) => new Date(d).toISOString();
+// Whole-second times come back as sent ("…T09:00:00Z"), without a ".000" suffix.
+const iso = (d) => new Date(d).toISOString().replace('.000Z', 'Z');
 const bookingOut = (r) => ({
   id: r.id, slot_id: r.slot_id, name: r.name, email: r.email, status: r.status, created_at: iso(r.created_at),
 });

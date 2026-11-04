@@ -71,6 +71,7 @@ async function check(name, fn) {
     assert.ok(r.body.slots.every((s) => s.available === true));
     assert.deepEqual(Object.keys(r.body.slots[1]).sort(), ['available', 'end', 'id', 'provider', 'start']);
     assert.equal(r.body.slots[1].provider, 'Dr Ade');
+    assert.equal(r.body.slots[0].start, '2020-01-01T09:00:00Z'); // echoed exactly as sent
   });
   await check('provider filter is exact match', async () => {
     const r = await call('GET', '/slots?provider=' + encodeURIComponent('Dr Ade'));
